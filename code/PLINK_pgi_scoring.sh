@@ -27,6 +27,10 @@ mkdir -p $TEMP
 # Array of chromosomes
 CHROMOSOMES=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22)
 
+#=======================================================================#
+# set up Launcher script to
+#=======================================================================#
+
 # Create or overwrite the merge list file
 merge_list_file="${TEMP}/merge_list.txt"
 > $merge_list_file
@@ -45,33 +49,10 @@ for CHR in "${CHROMOSOMES[@]}"; do
     FILTERED_VCF="${TEMP}/chr${CHR}.filtered.vcf.gz"
     PLINK_PREFIX="${TEMP}/chr${CHR}_biallelic"
 
-    # Initialize an empty command string
-    command=""
-
-    # Check if normalization is needed
-    if [ ! -f "${NORM_VCF}" ]; then
-        command="bcftools norm -m -both -o ${NORM_VCF} -O z ${VCF_FILE}"
-    fi
-
-    # Check if filtering is needed
-    if [ ! -f "${FILTERED_VCF}" ]; then
-        if [ -n "$command" ]; then
-            command="${command} && "
-        fi
-        command="${command}bcftools view -m2 -M2 -v snps ${NORM_VCF} -o ${FILTERED_VCF} -O z"
-    fi
-
-    # Check if PLINK conversion is needed
+    # Check if PLINK files already exist
     if [ ! -f "${PLINK_PREFIX}.pgen" ] || [ ! -f "${PLINK_PREFIX}.pvar" ] || [ ! -f "${PLINK_PREFIX}.psam" ]; then
-        if [ -n "$command" ]; then
-            command="${command} && "
-        fi
-        command="${command}plink2 --vcf ${FILTERED_VCF} --make-pgen --out ${PLINK_PREFIX}"
-    fi
-
-    # Add the command to the task file if there are tasks to be done
-    if [ -n "$command" ]; then
-        echo "$command" >> $task_file
+        # Add bcftools and plink2 commands to the task file
+        echo "bcftools norm -m -both -o ${NORM_VCF} -O z ${VCF_FILE} && bcftools view -m2 -M2 -v snps ${NORM_VCF} -o ${FILTERED_VCF} -O z && plink2 --vcf ${FILTERED_VCF} --make-pge$
     fi
 
     # Add the PLINK file prefix to the merge list
@@ -88,8 +69,6 @@ $LAUNCHER_DIR/paramrun
 
 # Merge the PLINK2 files using the merge list
 plink2 --pmerge-list $merge_list_file --make-pgen --out ${TEMP}/ah_merged
-
-
 
 #plink 	--bfile
 #	--score all_neu.PRS_input.snpRes 12 5 8 header sum center
