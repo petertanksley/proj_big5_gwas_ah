@@ -4,7 +4,7 @@
 #SBATCH -N 1              # Total # of nodes (must be 1 for serial)
 #SBATCH -n 22             # Total # of mpi tasks (should be 1 for serial)
 #SBATCH -p normal         # Queue (partition) name
-#SBATCH -t 08:00:00       # Run time (hh:mm:ss)
+#SBATCH -t 10:00:00       # Run time (hh:mm:ss)
 #SBATCH -A OTH21060       # Project/Allocation name (req'd if you have more than 1)
 #SBATCH --mail-type=all   # Send email at begin and end of job
 #SBATCH --mail-user=peter.tanksley@austin.utexas.edu
@@ -106,8 +106,15 @@ fi
 wait
 
 #=======================================================================#
-# Merge the PLINK2 files using the merge list
+# Merge the PLINK2 files using the merge list; keep only SNPs with acgt
 #=======================================================================#
 
-plink2 --pmerge-list $merge_list_file --make-pgen --out ${TEMP}/ah_merged
+plink2 	--pmerge-list $merge_list_file \
+	--make-pgen \
+	--multiallelics-already-joined \
+	--out ${TEMP}/ah_merged
 
+plink2 --pfile ${TEMP}/ah_merged \
+       --snps-only just-acgt \
+       --make-pgen \
+       --out ${TEMP}/ah_merged_snps
