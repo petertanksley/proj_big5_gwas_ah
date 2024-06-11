@@ -4,7 +4,7 @@
 #SBATCH -N 1              # Total # of nodes (must be 1 for serial)
 #SBATCH -n 22             # Total # of mpi tasks (should be 1 for serial)
 #SBATCH -p normal         # Queue (partition) name
-#SBATCH -t 10:00:00       # Run time (hh:mm:ss)
+#SBATCH -t 15:00:00       # Run time (hh:mm:ss)
 #SBATCH -A OTH21060       # Project/Allocation name (req'd if you have more than 1)
 #SBATCH --mail-type=all   # Send email at begin and end of job
 #SBATCH --mail-user=peter.tanksley@austin.utexas.edu
@@ -27,94 +27,65 @@ mkdir -p $TEMP
 CHROMOSOMES=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22)
 
 #=======================================================================#
-# Prepare merge list file
+# Merge all VCF files
 #=======================================================================#
 
-# Create or overwrite the merge list file
-merge_list_file="${TEMP}/merge_list.txt"
-> $merge_list_file
-
-# Generate launcher task file for smaller chromosomes
-task_file="${TEMP}/launcher_tasks.txt"
-> $task_file
-
-#=======================================================================#
-# Process large chromosomes sequentially
-#=======================================================================#
-
-for CHR in {1..4}; do
-    # Define input VCF file name
-    VCF_FILE="${INPUT}/chr${CHR}.dbGaP.dose.vcf.gz"
-
-    # Define intermediate and output file names
-    NORM_VCF="${TEMP}/chr${CHR}.normalized.vcf.gz"
-    FILTERED_VCF="${TEMP}/chr${CHR}.filtered.vcf.gz"
-    PLINK_PREFIX="${TEMP}/chr${CHR}_biallelic"
-
-    # Check if PLINK files already exist
-    if [ ! -f "${PLINK_PREFIX}.pgen" ] || [ ! -f "${PLINK_PREFIX}.pvar" ] || [ ! -f "${PLINK_PREFIX}.psam" ]; then
-        # Run bcftools and plink2 commands sequentially
-        bcftools norm -m -both -o ${NORM_VCF} -O z ${VCF_FILE}
-        bcftools view -m2 -M2 -v snps ${NORM_VCF} -o ${FILTERED_VCF} -O z
-        plink2 --vcf ${FILTERED_VCF} --make-pgen --out ${PLINK_PREFIX}
-    fi
-
-    # Add the PLINK file prefix to the merge list
-    echo "${PLINK_PREFIX}" >> $merge_list_file
+# Generate a list of input VCF files
+vcf_list="${TEMP}/vcf_list.txt"
+> $vcf_list
+for CHR in "${CHROMOSOMES[@]}"; do
+    echo "${INPUT}/chr${CHR}.dbGaP.dose.vcf.gz" >> $vcf_list
 done
 
-#=======================================================================#
-# Prepare tasks for smaller chromosomes using launcher
-#=======================================================================#
-
-for CHR in {5..22}; do
-    # Define input VCF file name
-    VCF_FILE="${INPUT}/chr${CHR}.dbGaP.dose.vcf.gz"
-
-    # Define intermediate and output file names
-    NORM_VCF="${TEMP}/chr${CHR}.normalized.vcf.gz"
-    FILTERED_VCF="${TEMP}/chr${CHR}.filtered.vcf.gz"
-    PLINK_PREFIX="${TEMP}/chr${CHR}_biallelic"
-
-    # Check if PLINK files already exist
-    if [ ! -f "${PLINK_PREFIX}.pgen" ] || [ ! -f "${PLINK_PREFIX}.pvar" ] || [ ! -f "${PLINK_PREFIX}.psam" ]; then
-        # Add bcftools and plink2 commands to the task file
-        echo "bcftools norm -m -both -o ${NORM_VCF} -O z ${VCF_FILE} && bcftools view -m2 -M2 -v snps ${NORM_VCF} -o ${FILTERED_VCF} -O z && plink2 --vcf ${FILTERED_VCF} --make-pgen --out ${PLINK_PREFIX}" >> $task_file
-    fi
-
-    # Add the PLINK file prefix to the merge list
-    echo "${PLINK_PREFIX}" >> $merge_list_file
-done
-
-#=======================================================================#
-# Run the launcher for smaller chromosomes if task file is not empty
-#=======================================================================#
-
-if [ -s $task_file ]; then
-    module load launcher
-    export LAUNCHER_PLUGIN_DIR=$LAUNCHER_DIR/plugins
-    export LAUNCHER_RMI=SLURM
-    export LAUNCHER_JOB_FILE=$task_file
-
-    $LAUNCHER_DIR/paramrun
+# Merge VCF files if the merged VCF file does not exist
+merged_vcf="${TEMP}/merged.vcf.gz"
+if [ ! -f $merged_vcf ]; then
+    bcftools merge -l $vcf_list -o $merged_vcf -O z
 fi
 
 #=======================================================================#
-# Wait for all tasks to complete
+# Filter multi-allelic variants
 #=======================================================================#
 
-wait
+filtered_vcf="${TEMP}/filtered.vcf.gz"
+
+# Remove multi-allelic variants and keep only bi-allelic SNPs if the filtered VCF file does not exist
+if [ ! -f $filtered_vcf ]; then
+    bcftools view -m2 -M2 -v snps $merged_vcf -o $filtered_vcf -O z
+fi
 
 #=======================================================================#
-# Merge the PLINK2 files using the merge list; keep only SNPs with acgt
+# Convert filtered VCF to PLINK2 format
 #=======================================================================#
 
-plink2 	--pmerge-list $merge_list_file \
-	--make-pgen \
-	--multiallelics-already-joined \
-	--out ${TEMP}/ah_merged
+# Define the output prefix for PLINK2 conversion
+plink_prefix="${TEMP}/ah_biallelic"
 
-plink2 --pfile ${TEMP}/ah_merged \
-       --snps-only just-acgt \
-       --make-pgen \
-       --out ${TEMP}/ah_merged_snps
+# Check if PLINK2 output files exist before running the conversion
+if [ ! -f "${plink_prefix}.pgen" ] || [ ! -f "${plink_prefix}.pvar" ] || [ ! -f "${plink_prefix}.psam" ]; then
+    plink2 --vcf $filtered_vcf --make-pgen --out $plink_prefix
+fi
+
+#=======================================================================#
+# Filter to ACGT alleles using PLINK2
+#=======================================================================#
+
+# Define the output prefix for the final PLINK2 files with ACGT alleles
+plink_acgt_prefix="${TEMP}/ah_biallelic_acgt"
+
+# Check if the final PLINK2 output files exist before running the ACGT allele filter
+if [ ! -f "${plink_acgt_prefix}.pgen" ] || [ ! -f "${plink_acgt_prefix}.pvar" ] || [ ! -f "${plink_acgt_prefix}.psam" ]; then
+    plink2 --pfile $plink_prefix --snps-only just-acgt --make-pgen --out $plink_acgt_prefix
+fi
+
+#=======================================================================#
+# Clean up intermediate files
+#=======================================================================#
+
+# Uncomment the line below if you want to remove intermediate files
+# rm $filtered_vcf $merged_vcf $vcf_list
+
+#=======================================================================#
+# Done
+#=======================================================================#
+
