@@ -51,7 +51,7 @@ done
 # Merge VCF files if the merged VCF file does not exist
 merged_vcf="${TEMP}/merged.vcf.gz"
 if [ ! -f $merged_vcf ]; then
-    bcftools merge -l $vcf_list -o $merged_vcf -O z
+    bcftools merge -l $vcf_list --force-samples -o $merged_vcf -O z
 fi
 
 #=======================================================================#
