@@ -34,7 +34,11 @@ for CHR in "${CHROMOSOMES[@]}"; do
     VCF_FILE="${INPUT}/chr${CHR}.dbGaP.dose.vcf.gz"
     if [ ! -f "${VCF_FILE}.tbi" ] && [ ! -f "${VCF_FILE}.csi" ]; then
         bcftools index $VCF_FILE
-    fi
+		if [ $? -ne 0 ]; then
+    		echo "Error indexing $VCF_FILE"
+    		exit 1
+		fi
+	fi
 done
 
 #=======================================================================#
@@ -50,8 +54,12 @@ done
 
 # Merge VCF files if the merged VCF file does not exist
 merged_vcf="${TEMP}/merged.vcf.gz"
-if [ ! -f $merged_vcf ]; then
+if [ ! -f $merged_vcf ] || [ ! -s $merged_vcf ]; then
     bcftools merge -l $vcf_list --force-samples -o $merged_vcf -O z
+	if [ $? -ne 0 ]; then
+        echo "Error merging VCF files"
+        exit 1
+    fi
 fi
 
 #=======================================================================#
