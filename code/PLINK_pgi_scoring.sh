@@ -2,9 +2,9 @@
 #SBATCH -J tt_pgs         # Job name
 #SBATCH -o tt_pgs.o%j     # Name of stdout output file
 #SBATCH -N 1              # Total # of nodes (must be 1 for serial)
-#SBATCH -n 22             # Total # of mpi tasks (should be 1 for serial)
+#SBATCH -n 1              # Total # of mpi tasks (should be 1 for serial)
 #SBATCH -p normal         # Queue (partition) name
-#SBATCH -t 15:00:00       # Run time (hh:mm:ss)
+#SBATCH -t 48:00:00       # Run time (hh:mm:ss)
 #SBATCH -A OTH21060       # Project/Allocation name (req'd if you have more than 1)
 #SBATCH --mail-type=all   # Send email at begin and end of job
 #SBATCH --mail-user=peter.tanksley@austin.utexas.edu
@@ -27,18 +27,16 @@ mkdir -p $TEMP
 CHROMOSOMES=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22)
 
 #=======================================================================#
-# Index VCF files
+# Sort/Index VCF files
 #=======================================================================#
 
 for CHR in "${CHROMOSOMES[@]}"; do
     VCF_FILE="${INPUT}/chr${CHR}.dbGaP.dose.vcf.gz"
     if [ ! -f "${VCF_FILE}.tbi" ] && [ ! -f "${VCF_FILE}.csi" ]; then
-        bcftools index $VCF_FILE
-		if [ $? -ne 0 ]; then
-    		echo "Error indexing $VCF_FILE"
-    		exit 1
-		fi
-	fi
+        SORTED_VCF_FILE="${VCF_FILE%.vcf.gz}_sorted.vcf.gz"
+        bcftools sort "${VCF_FILE}" -Oz -o "${SORTED_VCF_FILE}"
+        bcftools index -t "${SORTED_VCF_FILE}"
+    fi
 done
 
 #=======================================================================#
@@ -49,17 +47,13 @@ done
 vcf_list="${TEMP}/vcf_list.txt"
 > $vcf_list
 for CHR in "${CHROMOSOMES[@]}"; do
-    echo "${INPUT}/chr${CHR}.dbGaP.dose.vcf.gz" >> $vcf_list
+    echo "${INPUT}/chr${CHR}.dbGaP.dose_sorted.vcf.gz" >> $vcf_list
 done
 
 # Merge VCF files if the merged VCF file does not exist
 merged_vcf="${TEMP}/merged.vcf.gz"
 if [ ! -f $merged_vcf ] || [ ! -s $merged_vcf ]; then
     bcftools merge -l $vcf_list --force-samples -o $merged_vcf -O z
-	if [ $? -ne 0 ]; then
-        echo "Error merging VCF files"
-        exit 1
-    fi
 fi
 
 #=======================================================================#
