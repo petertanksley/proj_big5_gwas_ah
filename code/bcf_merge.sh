@@ -32,10 +32,12 @@ CHROMOSOMES=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22)
 
 for CHR in "${CHROMOSOMES[@]}"; do
     VCF_FILE="${INPUT}/chr${CHR}.dbGaP.dose.vcf.gz"
-    if [ ! -f "${VCF_FILE}.tbi" ] && [ ! -f "${VCF_FILE}.csi" ]; then
-        SORTED_VCF_FILE="${VCF_FILE%.vcf.gz}_sorted.vcf.gz"
-        bcftools sort "${VCF_FILE}" -Oz -o "${SORTED_VCF_FILE}"
-        bcftools index -t "${SORTED_VCF_FILE}"
+    SORTED_VCF_FILE="${INPUT}/chr${CHR}.dbGaP.dose_sorted.vcf.gz"
+    INDEX_FILE="${SORTED_VCF_FILE}.tbi"
+
+    if [ ! -f "$INDEX_FILE" ]; then
+        bcftools sort "$VCF_FILE" -Oz -o "$SORTED_VCF_FILE"
+        bcftools index -t "$SORTED_VCF_FILE"
     fi
 done
 
@@ -43,17 +45,17 @@ done
 # Merge all VCF files
 #=======================================================================#
 
-# Generate a list of input VCF files
+#create merge list
 vcf_list="${TEMP}/vcf_list.txt"
-> $vcf_list
+> "$vcf_list"
 for CHR in "${CHROMOSOMES[@]}"; do
-    echo "${INPUT}/chr${CHR}.dbGaP.dose_sorted.vcf.gz" >> $vcf_list
+    echo "${INPUT}/chr${CHR}.dbGaP.dose_sorted.vcf.gz" >> "$vcf_list"
 done
 
-# Merge VCF files if the merged VCF file does not exist
+#merge using list
 merged_vcf="${TEMP}/merged.vcf.gz"
-if [ ! -f $merged_vcf ] || [ ! -s $merged_vcf ]; then
-    bcftools merge -l $vcf_list --force-samples -o $merged_vcf -O z
+if [ ! -f "$merged_vcf" ] || [ ! -s "$merged_vcf" ]; then
+    bcftools merge -l "$vcf_list" --force-samples -o "$merged_vcf" -O z
 fi
 
 #=======================================================================#
