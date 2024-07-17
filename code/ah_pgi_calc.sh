@@ -5,7 +5,7 @@
 #SBATCH -n 1              # Total # of mpi tasks (should be 1 for serial)
 #SBATCH -p normal         # Queue (partition) name
 #SBATCH -t 01:00:00       # Run time (hh:mm:ss)
-#SBATCH -A OTH21016       # Project/Allocation name (req'd if you have more than 1)
+#SBATCH -A OTH21060       # Project/Allocation name (req'd if you have more than 1)
 #SBATCH --mail-type=all   # Send email at begin and end of job
 #SBATCH --mail-user=peter.tanksley@austin.utexas.edu
 
@@ -97,7 +97,7 @@ for factor in "${factors[@]}"; do
 
     # Check if the output file exists
     if [ ! -f "${output_file}.sscore" ]; then
-        plink2 --pfile "${TEMP}/ah_snps_allids_nodups_merged" --score "${SNP_WEIGHTS}/all_{factor}.PRS_input.snpRes" 12 5 8 header-read center --out "${output_file}"
+        plink2 --pfile "${TEMP}/ah_snps_allids_nodups_merged" --score "${SNP_WEIGHTS}/all_${factor}.PRS_input.snpRes" 12 5 8 header-read center --out "${output_file}"
     fi
 done
 
